@@ -1,0 +1,8 @@
+  0s json_serializable on 18 inputs; lib/app.dart
+  0s json_serializable on 18 inputs: 1 skipped; lib/main.dart
+  0s json_serializable on 18 inputs: 18 skipped
+  0s source_gen:combining_builder on 18 inputs; lib/app.dart
+  0s source_gen:combining_builder on 18 inputs: 18 skipped
+E json_serializable on lib/app.dart:
+  PathAccessException: Deletion failed, path = '.dart_tool\build_resolvers\30445aed' (OS Error: Zugriff verweigert, errno = 5)
+  Failed to build with build_runner/jit in 2s; wrote 0 outputs.

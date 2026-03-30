@@ -16,6 +16,9 @@ DiagramTab _$DiagramTabFromJson(Map<String, dynamic> json) => DiagramTab(
   connections: (json['connections'] as List<dynamic>?)
       ?.map((e) => Connection.fromJson(e as Map<String, dynamic>))
       .toList(),
+  settings: json['settings'] == null
+      ? null
+      : DiagramSettings.fromJson(json['settings'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$DiagramTabToJson(DiagramTab instance) =>
@@ -25,6 +28,7 @@ Map<String, dynamic> _$DiagramTabToJson(DiagramTab instance) =>
       'diagramType': _$SysmlDiagramTypeEnumMap[instance.diagramType]!,
       'elements': instance.elements,
       'connections': instance.connections,
+      'settings': instance.settings,
     };
 
 const _$SysmlDiagramTypeEnumMap = {
@@ -51,6 +55,9 @@ Project _$ProjectFromJson(Map<String, dynamic> json) => Project(
   tabs: (json['tabs'] as List<dynamic>?)
       ?.map((e) => DiagramTab.fromJson(e as Map<String, dynamic>))
       .toList(),
+  settings: json['settings'] == null
+      ? null
+      : ProjectSettings.fromJson(json['settings'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$ProjectToJson(Project instance) => <String, dynamic>{
@@ -60,4 +67,5 @@ Map<String, dynamic> _$ProjectToJson(Project instance) => <String, dynamic>{
   'modifiedAt': instance.modifiedAt.toIso8601String(),
   'description': instance.description,
   'tabs': instance.tabs,
+  'settings': instance.settings,
 };
