@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../../models/sysml_types.dart';
 import '../../models/sysml_element.dart';
 import '../../models/connection.dart';
+import '../../utils/routing_utils.dart';
 
 class CanvasPainter extends CustomPainter {
   final double zoom;
@@ -70,15 +71,7 @@ class CanvasPainter extends CustomPainter {
       final source = elements.firstWhere((e) => e.id == connection.sourceElementId);
       final target = elements.firstWhere((e) => e.id == connection.targetElementId);
 
-      final startPos = Offset(
-        source.x + source.width / 2,
-        source.y + source.height / 2,
-      );
-      final endPos = Offset(
-        target.x + target.width / 2,
-        target.y + target.height / 2,
-      );
-
+      final pathPoints = RoutingUtils.calculateOrthogonalPath(source, target);
       final isSelected = connection.id == selectedConnectionId;
 
       final paint = Paint()
@@ -86,14 +79,21 @@ class CanvasPainter extends CustomPainter {
         ..strokeWidth = (isSelected ? 3.0 : 2.0) / zoom
         ..style = PaintingStyle.stroke;
 
+      final roundedPath = _createRoundedPath(pathPoints, 8.0 / zoom);
+
       if (connection.type == ConnectionType.dependency) {
         paint.strokeWidth = (isSelected ? 2.5 : 1.5) / zoom;
-        _drawDashedLine(canvas, startPos, endPos, paint);
+        _drawDashedPath(canvas, roundedPath, paint);
       } else {
-        canvas.drawLine(startPos, endPos, paint);
+        canvas.drawPath(roundedPath, paint);
       }
 
-      _drawArrowhead(canvas, startPos, endPos, connection.type, isSelected);
+      // Calculate direction of the last segment for arrowhead
+      if (pathPoints.length >= 2) {
+        final last = pathPoints.last;
+        final secondLast = pathPoints[pathPoints.length - 2];
+        _drawArrowhead(canvas, secondLast, last, connection.type, isSelected);
+      }
     }
   }
 
@@ -101,34 +101,87 @@ class CanvasPainter extends CustomPainter {
     if (activeConnectionType == null || connectionSourceId == null || mousePosition == null) return;
 
     final source = elements.firstWhere((e) => e.id == connectionSourceId);
-    final startPos = Offset(
-      source.x + source.width / 2,
-      source.y + source.height / 2,
-    );
+    final sourceRect = Rect.fromLTWH(source.x, source.y, source.width, source.height);
+    
+    // Choose start position on source boundary
+    final start = sourceRect.center;
+    final end = mousePosition!;
+    
+    // Simple logic for preview start point
+    late Offset previewStart;
+    if ((end.dx - start.dx).abs() > (end.dy - start.dy).abs()) {
+      previewStart = Offset(end.dx > start.dx ? sourceRect.right : sourceRect.left, start.dy);
+    } else {
+      previewStart = Offset(start.dx, end.dy > start.dy ? sourceRect.bottom : sourceRect.top);
+    }
+
+    final pathPoints = RoutingUtils.calculatePreviewRoute(previewStart, end);
 
     final paint = Paint()
       ..color = Colors.blue.withOpacity(0.5)
       ..strokeWidth = 2.0 / zoom
       ..style = PaintingStyle.stroke;
 
-    _drawDashedLine(canvas, startPos, mousePosition!, paint);
+    final roundedPath = _createRoundedPath(pathPoints, 8.0 / zoom);
+    _drawDashedPath(canvas, roundedPath, paint);
   }
 
-  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint) {
+  Path _createRoundedPath(List<Offset> points, double radius) {
+    if (points.isEmpty) return Path();
+    final path = Path();
+    path.moveTo(points[0].dx, points[0].dy);
+
+    if (points.length < 2) return path;
+
+    for (int i = 1; i < points.length; i++) {
+      final p1 = points[i - 1];
+      final p2 = points[i];
+
+      if (i < points.length - 1) {
+        final p3 = points[i + 1];
+        
+        // Direction vectors
+        final v1 = (p2 - p1);
+        final v2 = (p3 - p2);
+        
+        final actualRadius = math.min(radius, math.min(v1.distance / 2, v2.distance / 2));
+        
+        final d1 = v1 / v1.distance;
+        final d2 = v2 / v2.distance;
+        
+        final curveStart = p2 - d1 * actualRadius;
+        final curveEnd = p2 + d2 * actualRadius;
+        
+        path.lineTo(curveStart.dx, curveStart.dy);
+        path.arcToPoint(
+          curveEnd,
+          radius: Radius.circular(actualRadius),
+          clockwise: _isClockwise(p1, p2, p3),
+        );
+      } else {
+        path.lineTo(p2.dx, p2.dy);
+      }
+    }
+    return path;
+  }
+
+  bool _isClockwise(Offset a, Offset b, Offset c) {
+    // Cross product of (b-a) and (c-b)
+    return (b.dx - a.dx) * (c.dy - b.dy) - (b.dy - a.dy) * (c.dx - b.dx) > 0;
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
     const dashWidth = 10.0;
     const dashSpace = 5.0;
-    double distance = (end - start).distance;
-    if (distance == 0) return;
-    double currentDistance = 0;
-    Offset direction = (end - start) / distance;
 
-    while (currentDistance < distance) {
-      canvas.drawLine(
-        start + direction * currentDistance,
-        start + direction * math.min(currentDistance + dashWidth, distance),
-        paint,
-      );
-      currentDistance += dashWidth + dashSpace;
+    for (final pathMetric in path.computeMetrics()) {
+      double distance = 0.0;
+      while (distance < pathMetric.length) {
+        final double nextDistance = distance + dashWidth;
+        final Path dashPath = pathMetric.extractPath(distance, math.min(nextDistance, pathMetric.length));
+        canvas.drawPath(dashPath, paint);
+        distance = nextDistance + dashSpace;
+      }
     }
   }
 
