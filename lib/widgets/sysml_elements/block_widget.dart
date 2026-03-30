@@ -4,11 +4,13 @@ import '../../models/sysml_element.dart';
 class BlockWidget extends StatelessWidget {
   final SysmlElement element;
   final bool isSelected;
+  final bool isConnectionSource;
 
   const BlockWidget({
     super.key,
     required this.element,
     this.isSelected = false,
+    this.isConnectionSource = false,
   });
 
   @override
@@ -19,15 +21,18 @@ class BlockWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
         border: Border.all(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outline,
-          width: isSelected ? 2.0 : 1.0,
+          color: isConnectionSource
+              ? Colors.orange
+              : (isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.outline),
+          width: (isSelected || isConnectionSource) ? 2.0 : 1.0,
         ),
-        boxShadow: isSelected
+        boxShadow: (isSelected || isConnectionSource)
             ? [
                 BoxShadow(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  color: (isConnectionSource ? Colors.orange : Theme.of(context).colorScheme.primary)
+                      .withOpacity(0.3),
                   blurRadius: 8,
                   spreadRadius: 2,
                 )

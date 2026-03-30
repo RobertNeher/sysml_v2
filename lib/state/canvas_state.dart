@@ -8,6 +8,7 @@ class CanvasState extends ChangeNotifier {
   final Set<String> _selectedIds = {};
   Offset? _selectionStart;
   Offset? _selectionEnd;
+  Offset _mousePosition = Offset.zero;
 
   double get zoom => _zoom;
   Offset get panOffset => _panOffset;
@@ -16,6 +17,7 @@ class CanvasState extends ChangeNotifier {
   Set<String> get selectedIds => _selectedIds;
   Offset? get selectionStart => _selectionStart;
   Offset? get selectionEnd => _selectionEnd;
+  Offset get mousePosition => _mousePosition;
 
   void setSelectedIds(Set<String> ids) {
     _selectedIds.clear();
@@ -68,6 +70,11 @@ class CanvasState extends ChangeNotifier {
   void clearSelectionBox() {
     _selectionStart = null;
     _selectionEnd = null;
+    notifyListeners();
+  }
+
+  void updateMousePosition(Offset position) {
+    _mousePosition = position;
     notifyListeners();
   }
 

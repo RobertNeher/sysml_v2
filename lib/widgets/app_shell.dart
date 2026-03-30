@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import 'sidebar/sidebar.dart';
+import 'sidebar/property_inspector.dart';
 import 'canvas/canvas_view.dart';
 import 'settings/settings_dialog.dart';
 import 'dialogs/tab_dialogs.dart';
@@ -16,6 +17,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   bool _isSidebarVisible = true;
+  bool _isInspectorVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +66,17 @@ class _AppShellState extends State<AppShell> {
             },
             tooltip: 'Settings',
           ),
+          IconButton(
+            icon: Icon(appState.selectedElementId != null || appState.selectedConnectionId != null 
+                ? Icons.info 
+                : Icons.info_outline),
+            onPressed: () {
+              setState(() {
+                _isInspectorVisible = !_isInspectorVisible;
+              });
+            },
+            tooltip: 'Toggle Inspector',
+          ),
           const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
@@ -95,6 +108,13 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
           ),
+          if (_isInspectorVisible) ...[
+            const VerticalDivider(width: 1),
+            const SizedBox(
+              width: 250,
+              child: PropertyInspector(),
+            ),
+          ],
         ],
       ),
     );

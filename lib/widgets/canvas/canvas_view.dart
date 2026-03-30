@@ -79,8 +79,8 @@ class _CanvasViewState extends State<CanvasView> {
 
               if (isControlPressed) {
                 if (event.logicalKey == LogicalKeyboardKey.keyA) {
-                  final ids = appState.currentTab.elements.map((e) => e.id);
-                  canvasState.selectAll(ids);
+                  final ids = appState.currentTab.elements.map((e) => e.id).toSet();
+                  canvasState.setSelectedIds(ids);
                   return KeyEventResult.handled;
                 }
                 void showShiftMessage() {
@@ -240,14 +240,39 @@ class _CanvasViewState extends State<CanvasView> {
                   onPointerDown: (event) {
                     final bool isCtrlPressed =
                         HardwareKeyboard.instance.isControlPressed;
+                    
+                    final worldPos = Offset(
+                      (event.localPosition.dx - translation.x) / scale,
+                      (event.localPosition.dy - translation.y) / scale,
+                    );
+
+                    // Check for connection hit-test first
+                    String? hitConnectionId;
+                    for (var conn in appState.currentTab.connections) {
+                      final source = appState.currentTab.elements.firstWhere((e) => e.id == conn.sourceElementId);
+                      final target = appState.currentTab.elements.firstWhere((e) => e.id == conn.targetElementId);
+                      final start = Offset(source.x + source.width / 2, source.y + source.height / 2);
+                      final end = Offset(target.x + target.width / 2, target.y + target.height / 2);
+                      
+                      // Simple line distance hit test
+                      final dist = (worldPos - start).distance + (worldPos - end).distance;
+                      final lineLen = (start - end).distance;
+                      if ((dist - lineLen).abs() < 5.0 / scale) {
+                        hitConnectionId = conn.id;
+                        break;
+                      }
+                    }
+
+                    if (hitConnectionId != null) {
+                      appState.setSelectedConnectionId(hitConnectionId);
+                      return;
+                    }
+
                     if (isCtrlPressed) {
-                      final worldPos = Offset(
-                        (event.localPosition.dx - translation.x) / scale,
-                        (event.localPosition.dy - translation.y) / scale,
-                      );
                       canvasState.startSelection(worldPos);
                     } else {
                       canvasState.clearSelection();
+                      appState.setSelectedElementId(null);
                     }
                   },
                   onPointerMove: (event) {
@@ -271,40 +296,55 @@ class _CanvasViewState extends State<CanvasView> {
                       final selectedIds = elements
                           .where((e) => rect.overlaps(
                               Rect.fromLTWH(e.x, e.y, e.width, e.height)))
-                          .map((e) => e.id);
-                      canvasState.selectAll(selectedIds);
+                          .map((e) => e.id)
+                          .toSet();
+                      canvasState.setSelectedIds(selectedIds);
                     }
                     canvasState.clearSelectionBox();
                   },
-                  child: ClipRect(
-                    child: InteractiveViewer(
-                      transformationController: _transformationController,
-                      boundaryMargin: const EdgeInsets.all(double.infinity),
-                      minScale: 0.1,
-                      maxScale: 5.0,
-                      // Disable IV handles if Ctrl is pressed to allow selection box
-                      panEnabled: !HardwareKeyboard.instance.isControlPressed,
-                      scaleEnabled: !HardwareKeyboard.instance.isControlPressed,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: CanvasPainter(
-                                zoom: scale,
-                                panOffset: Offset(translation.x, translation.y),
-                                showGrid: canvasState.showGrid,
-                                gridSize: canvasState.gridSize,
-                                gridColor: Theme.of(context).colorScheme.outline,
-                                selectionStart: canvasState.selectionStart,
-                                selectionEnd: canvasState.selectionEnd,
+                  child: MouseRegion(
+                    onHover: (event) {
+                      final worldX = (event.localPosition.dx - translation.x) / scale;
+                      final worldY = (event.localPosition.dy - translation.y) / scale;
+                      canvasState.updateMousePosition(Offset(worldX, worldY));
+                    },
+                    child: ClipRect(
+                      child: InteractiveViewer(
+                        transformationController: _transformationController,
+                        boundaryMargin: const EdgeInsets.all(double.infinity),
+                        minScale: 0.1,
+                        maxScale: 5.0,
+                        // Disable IV handles if Ctrl is pressed to allow selection box
+                        panEnabled: !HardwareKeyboard.instance.isControlPressed,
+                        scaleEnabled: !HardwareKeyboard.instance.isControlPressed,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: CanvasPainter(
+                                  zoom: scale,
+                                  panOffset: Offset(translation.x, translation.y),
+                                  showGrid: canvasState.showGrid,
+                                  gridSize: canvasState.gridSize,
+                                  gridColor: Theme.of(context).colorScheme.outline,
+                                  selectionStart: canvasState.selectionStart,
+                                  selectionEnd: canvasState.selectionEnd,
+                                  elements: appState.currentTab.elements,
+                                  connections: appState.currentTab.connections,
+                                  connectionSourceId: appState.connectionSourceId,
+                                  activeConnectionType: appState.activeConnectionType,
+                                  selectedConnectionId: appState.selectedConnectionId,
+                                  mousePosition: canvasState.mousePosition,
+                                ),
                               ),
                             ),
-                          ),
-                          _ElementsLayer(
-                            elements: appState.currentTab.elements,
-                            scale: scale,
-                          ),
-                        ],
+                            _ElementsLayer(
+                              elements: appState.currentTab.elements,
+                              scale: scale,
+                              connectionSourceId: appState.connectionSourceId,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -321,8 +361,13 @@ class _CanvasViewState extends State<CanvasView> {
 class _ElementsLayer extends StatelessWidget {
   final List<SysmlElement> elements;
   final double scale;
+  final String? connectionSourceId;
 
-  const _ElementsLayer({required this.elements, required this.scale});
+  const _ElementsLayer({
+    required this.elements,
+    required this.scale,
+    this.connectionSourceId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -330,8 +375,6 @@ class _ElementsLayer extends StatelessWidget {
     final appState = context.read<AppState>();
 
     void _handleElementTap(String id) {
-      final appState = context.read<AppState>();
-      
       if (appState.activeConnectionType != null) {
         if (appState.connectionSourceId == null) {
           appState.setConnectionSourceId(id);
@@ -381,6 +424,7 @@ class _ElementsLayer extends StatelessWidget {
             child: BlockWidget(
               element: element,
               isSelected: isSelected,
+              isConnectionSource: connectionSourceId == element.id,
             ),
           ),
         );
