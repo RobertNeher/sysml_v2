@@ -17,6 +17,12 @@ class CanvasState extends ChangeNotifier {
   Offset? get selectionStart => _selectionStart;
   Offset? get selectionEnd => _selectionEnd;
 
+  void setSelectedIds(Set<String> ids) {
+    _selectedIds.clear();
+    _selectedIds.addAll(ids);
+    notifyListeners();
+  }
+
   bool isSelected(String id) => _selectedIds.contains(id);
 
   void selectElement(String id, {bool multi = false}) {

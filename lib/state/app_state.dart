@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -7,11 +8,29 @@ import '../models/project.dart';
 import '../models/sysml_types.dart';
 import '../models/alignment_types.dart';
 import '../models/settings.dart';
+import '../models/connection.dart';
 
 class AppState extends ChangeNotifier {
   Project _project;
   int _currentTabIndex = 0;
   final _uuid = const Uuid();
+
+  ConnectionType? _activeConnectionType;
+  String? _connectionSourceId;
+
+  ConnectionType? get activeConnectionType => _activeConnectionType;
+  String? get connectionSourceId => _connectionSourceId;
+
+  void setActiveConnectionType(ConnectionType? type) {
+    _activeConnectionType = type;
+    _connectionSourceId = null;
+    notifyListeners();
+  }
+
+  void setConnectionSourceId(String? id) {
+    _connectionSourceId = id;
+    notifyListeners();
+  }
 
   AppState()
       : _project = Project(
@@ -87,6 +106,26 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void addConnection(String sourceId, String targetId, ConnectionType type) {
+    if (sourceId == targetId) return;
+    _saveHistoryState();
+    final tab = currentTab;
+    final exists = tab.connections.any((c) =>
+        c.sourceElementId == sourceId &&
+        c.targetElementId == targetId &&
+        c.type == type);
+    if (!exists) {
+      final connection = Connection(
+        id: _uuid.v4(),
+        sourceElementId: sourceId,
+        targetElementId: targetId,
+        type: type,
+      );
+      tab.connections.add(connection);
+      notifyListeners();
+    }
+  }
+
   void removeTab(int index) {
     if (_project.tabs.length > 1) {
       _saveHistoryState();
@@ -150,9 +189,15 @@ class AppState extends ChangeNotifier {
     _saveHistoryState();
     bool changed = false;
     for (var tab in _project.tabs) {
-      final before = tab.elements.length;
+      final beforeElements = tab.elements.length;
       tab.elements.removeWhere((e) => ids.contains(e.id));
-      if (tab.elements.length != before) {
+      
+      // Cascade delete connections
+      final beforeConnections = tab.connections.length;
+      tab.connections.removeWhere((c) => 
+        ids.contains(c.sourceElementId) || ids.contains(c.targetElementId));
+
+      if (tab.elements.length != beforeElements || tab.connections.length != beforeConnections) {
         changed = true;
       }
     }
@@ -285,6 +330,25 @@ class AppState extends ChangeNotifier {
   void updateTabName(int index, String newName) {
     _project.tabs[index].name = newName;
     notifyListeners();
+  }
+
+  String exportProjectJson() {
+    _project.modifiedAt = DateTime.now();
+    return jsonEncode(_project.toJson());
+  }
+
+  void importProjectJson(String jsonStr) {
+    try {
+      final Map<String, dynamic> data = jsonDecode(jsonStr);
+      _project = Project.fromJson(data);
+      _history.clear();
+      _historyIndex = -1;
+      _currentTabIndex = 0;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error importing project: $e');
+      rethrow;
+    }
   }
 
   void updateProjectMetadata({
