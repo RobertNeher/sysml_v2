@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import 'sidebar/sidebar.dart';
 import 'canvas/canvas_view.dart';
+import 'settings/settings_dialog.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -36,6 +37,16 @@ class _AppShellState extends State<AppShell> {
               // TODO: Implement open
             },
             tooltip: 'Open Project (Ctrl+O)',
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => const SettingsDialog(),
+              );
+            },
+            tooltip: 'Settings',
           ),
           const SizedBox(width: 8),
         ],

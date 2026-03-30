@@ -6,6 +6,8 @@ class CanvasPainter extends CustomPainter {
   final bool showGrid;
   final double gridSize;
   final Color gridColor;
+  final Offset? selectionStart;
+  final Offset? selectionEnd;
 
   CanvasPainter({
     required this.zoom,
@@ -13,6 +15,8 @@ class CanvasPainter extends CustomPainter {
     required this.showGrid,
     required this.gridSize,
     required this.gridColor,
+    this.selectionStart,
+    this.selectionEnd,
   });
 
   @override
@@ -21,7 +25,9 @@ class CanvasPainter extends CustomPainter {
       _drawGrid(canvas, size);
     }
     
-    // Connections will be drawn here later
+    if (selectionStart != null && selectionEnd != null) {
+      _drawSelectionBox(canvas);
+    }
   }
 
   void _drawGrid(Canvas canvas, Size size) {
@@ -46,11 +52,34 @@ class CanvasPainter extends CustomPainter {
     }
   }
 
+  void _drawSelectionBox(Canvas canvas) {
+    if (selectionStart == null || selectionEnd == null) return;
+
+    final paint = Paint()
+      ..color = Colors.blue.withOpacity(0.2)
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = Colors.blue
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final rect = Rect.fromPoints(
+      selectionStart!,
+      selectionEnd!,
+    );
+
+    canvas.drawRect(rect, paint);
+    canvas.drawRect(rect, borderPaint);
+  }
+
   @override
   bool shouldRepaint(covariant CanvasPainter oldDelegate) {
     return oldDelegate.zoom != zoom ||
         oldDelegate.panOffset != panOffset ||
         oldDelegate.showGrid != showGrid ||
-        oldDelegate.gridSize != gridSize;
+        oldDelegate.gridSize != gridSize ||
+        oldDelegate.selectionStart != selectionStart ||
+        oldDelegate.selectionEnd != selectionEnd;
   }
 }
