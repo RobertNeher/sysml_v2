@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
+import '../../models/sysml_types.dart';
 
 class PropertyInspector extends StatefulWidget {
   const PropertyInspector({super.key});
@@ -11,11 +12,17 @@ class PropertyInspector extends StatefulWidget {
 
 class _PropertyInspectorState extends State<PropertyInspector> {
   final TextEditingController _labelController = TextEditingController();
+  final TextEditingController _reqIdController = TextEditingController();
+  final TextEditingController _statementController = TextEditingController();
+  final TextEditingController _rationaleController = TextEditingController();
   String? _currentlyEditingId;
 
   @override
   void dispose() {
     _labelController.dispose();
+    _reqIdController.dispose();
+    _statementController.dispose();
+    _rationaleController.dispose();
     super.dispose();
   }
 
@@ -41,6 +48,9 @@ class _PropertyInspectorState extends State<PropertyInspector> {
       
       if (_currentlyEditingId != selectedElementId) {
         _labelController.text = element.label;
+        _reqIdController.text = element.properties['reqId'] ?? '';
+        _statementController.text = element.properties['statement'] ?? '';
+        _rationaleController.text = element.properties['rationale'] ?? '';
         _currentlyEditingId = selectedElementId;
       }
 
@@ -53,6 +63,28 @@ class _PropertyInspectorState extends State<PropertyInspector> {
             controller: _labelController,
             onChanged: (val) => appState.updateElementLabel(element.id, val),
           ),
+          if (element.type == SysmlElementType.requirement) ...[
+            const SizedBox(height: 16),
+            _buildTextField(
+              label: 'Requirement ID',
+              controller: _reqIdController,
+              onChanged: (val) => appState.updateElementProperty(element.id, 'reqId', val),
+            ),
+            const SizedBox(height: 16),
+            _buildTextField(
+              label: 'Statement',
+              controller: _statementController,
+              maxLines: 5,
+              onChanged: (val) => appState.updateElementProperty(element.id, 'statement', val),
+            ),
+            const SizedBox(height: 16),
+            _buildTextField(
+              label: 'Rationale',
+              controller: _rationaleController,
+              maxLines: 3,
+              onChanged: (val) => appState.updateElementProperty(element.id, 'rationale', val),
+            ),
+          ],
           const SizedBox(height: 16),
           _buildInfoRow('ID', element.id),
           _buildInfoRow('Position', '(${element.x.toInt()}, ${element.y.toInt()})'),
@@ -130,9 +162,11 @@ class _PropertyInspectorState extends State<PropertyInspector> {
     required String label,
     required TextEditingController controller,
     required Function(String) onChanged,
+    int maxLines = 1,
   }) {
     return TextField(
       controller: controller,
+      maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),

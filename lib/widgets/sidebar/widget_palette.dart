@@ -87,7 +87,14 @@ class WidgetPalette extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      elevation: isSelected ? 4 : 1,
       color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: isSelected 
+          ? BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)
+          : BorderSide.none,
+      ),
       child: ListTile(
         leading: Icon(icon, color: isSelected ? Theme.of(context).colorScheme.primary : null),
         title: Text(label, style: TextStyle(color: isSelected ? Theme.of(context).colorScheme.primary : null, fontWeight: isSelected ? FontWeight.bold : null)),
@@ -109,31 +116,52 @@ class WidgetPalette extends StatelessWidget {
     SysmlElementType type,
     IconData icon,
   ) {
+    final color = _getArchetypeColor(type);
+    
     return Draggable<SysmlElementType>(
       data: type,
       feedback: Material(
-        elevation: 4,
+        elevation: 8,
+        borderRadius: BorderRadius.circular(4),
         child: Container(
-          padding: const EdgeInsets.all(8),
-          color: Theme.of(context).colorScheme.secondaryContainer,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.black26),
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 20),
+              Icon(icon, size: 18),
               const SizedBox(width: 8),
-              Text(label),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             ],
           ),
         ),
       ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),
+        color: color.withOpacity(0.7),
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: ListTile(
-          leading: Icon(icon),
-          title: Text(label),
+          leading: Icon(icon, size: 20, color: Colors.black87),
+          title: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           dense: true,
         ),
       ),
     );
+  }
+
+  Color _getArchetypeColor(SysmlElementType type) {
+    switch (type) {
+      case SysmlElementType.block: return const Color(0xFFCCFFCC);
+      case SysmlElementType.requirement: return const Color(0xFF99CCFF);
+      case SysmlElementType.useCase: return const Color(0xFFFFCCFF);
+      case SysmlElementType.partProperty:
+      case SysmlElementType.actor: return const Color(0xFFFFFF99);
+      default: return Colors.white;
+    }
   }
 }

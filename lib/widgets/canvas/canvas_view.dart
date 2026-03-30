@@ -232,7 +232,9 @@ class _CanvasViewState extends State<CanvasView> {
                     type: details.data,
                     x: snappedX,
                     y: snappedY,
-                    label: 'New ${details.data.name}',
+                    width: details.data == SysmlElementType.port ? 20 : (details.data == SysmlElementType.requirement ? 150 : 120),
+                    height: details.data == SysmlElementType.port ? 20 : (details.data == SysmlElementType.requirement ? 100 : 80),
+                    label: details.data == SysmlElementType.port ? '' : 'New ${details.data.name}',
                   ),
                 );
               },
@@ -430,7 +432,7 @@ class _ElementsLayer extends StatelessWidget {
                 appState.moveElements(canvasState.selectedIds, delta);
               }
             },
-            child: BlockWidget(
+            child: ElementWidget(
               element: element,
               isSelected: isSelected,
               isConnectionSource: connectionSourceId == element.id,

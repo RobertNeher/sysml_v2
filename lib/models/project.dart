@@ -42,6 +42,18 @@ class DiagramTab {
   }
 
   DiagramSettings? settings;
+
+  DiagramTab updateElement(String id, SysmlElement Function(SysmlElement) updater) {
+    final newElements = elements.map((e) => e.id == id ? updater(e) : e).toList();
+    return DiagramTab(
+      id: id,
+      name: name,
+      diagramType: diagramType,
+      elements: newElements,
+      connections: connections,
+      settings: settings,
+    );
+  }
 }
 
 @JsonSerializable()
@@ -80,6 +92,34 @@ class Project {
       description: description,
       tabs: tabs.map((t) => t.clone()).toList(),
       settings: settings.copyWith(),
+    );
+  }
+
+  Project updateElement(int tabIndex, String elementId, SysmlElement Function(SysmlElement) updater) {
+    final newTabs = List<DiagramTab>.from(tabs);
+    newTabs[tabIndex] = newTabs[tabIndex].updateElement(elementId, updater);
+    return Project(
+      name: name,
+      author: author,
+      createdAt: createdAt,
+      modifiedAt: DateTime.now(),
+      description: description,
+      tabs: newTabs,
+      settings: settings,
+    );
+  }
+
+  Project updateTabSettings(int tabIndex, DiagramSettings settings) {
+    final newTabs = List<DiagramTab>.from(tabs);
+    newTabs[tabIndex].settings = settings;
+    return Project(
+      name: name,
+      author: author,
+      createdAt: createdAt,
+      modifiedAt: DateTime.now(),
+      description: description,
+      tabs: newTabs,
+      settings: this.settings,
     );
   }
 

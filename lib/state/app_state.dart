@@ -148,15 +148,27 @@ class AppState extends ChangeNotifier {
   }
 
   void updateElementLabel(String id, String newLabel) {
+    _project = _project.updateElement(
+      _currentTabIndex,
+      id,
+      (e) => e.copyWith(label: newLabel),
+    );
     _saveHistoryState();
-    for (var tab in _project.tabs) {
-      final index = tab.elements.indexWhere((e) => e.id == id);
-      if (index != -1) {
-        tab.elements[index] = tab.elements[index].copyWith(label: newLabel);
-        notifyListeners();
-        return;
-      }
-    }
+    notifyListeners();
+  }
+
+  void updateElementProperty(String id, String key, dynamic value) {
+    _project = _project.updateElement(
+      _currentTabIndex,
+      id,
+      (e) {
+        final newProperties = Map<String, dynamic>.from(e.properties);
+        newProperties[key] = value;
+        return e.copyWith(properties: newProperties);
+      },
+    );
+    _saveHistoryState();
+    notifyListeners();
   }
 
   // Connection Management
@@ -201,7 +213,9 @@ class AppState extends ChangeNotifier {
   bool alignSelectedElements(Set<String> ids, AlignmentType type, {double gap = 20.0}) {
     if (ids.length < 2) return false;
     _saveHistoryState();
-    // Implementation details...
+    // - [x] Create `lib/theme/coad_colors.dart` with archetype constants.
+    // - [x] Add `updateElementProperty` to `AppState`.
+    // - [ ] Implement `RequirementPainter` for the folded corner effect.
     return false;
   }
 
