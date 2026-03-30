@@ -19,6 +19,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
   bool? _tabShowGrid;
   bool? _tabSnapToGrid;
 
+  late String _projectName;
+  late String _projectAuthor;
+  late String _projectDescription;
+
   @override
   void initState() {
     super.initState();
@@ -33,12 +37,16 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _tabGridSize = tab?.gridSize;
     _tabShowGrid = tab?.showGrid;
     _tabSnapToGrid = tab?.snapToGrid;
+
+    _projectName = appState.project.name;
+    _projectAuthor = appState.project.author;
+    _projectDescription = appState.project.description;
   }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: AlertDialog(
         title: const Text('Settings'),
         content: SizedBox(
@@ -50,6 +58,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 tabs: [
                   Tab(text: 'Global'),
                   Tab(text: 'Current Diagram'),
+                  Tab(text: 'Project Info'),
                 ],
               ),
               Expanded(
@@ -57,6 +66,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   children: [
                     _buildGlobalSettings(),
                     _buildDiagramSettings(),
+                    _buildProjectInfo(),
                   ],
                 ),
               ),
@@ -187,6 +197,35 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
+  Widget _buildProjectInfo() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          decoration: const InputDecoration(labelText: 'Project Name'),
+          controller: TextEditingController(text: _projectName),
+          onChanged: (val) => _projectName = val,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          decoration: const InputDecoration(labelText: 'Author'),
+          controller: TextEditingController(text: _projectAuthor),
+          onChanged: (val) => _projectAuthor = val,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          decoration: const InputDecoration(
+            labelText: 'Description (Markdown)',
+            alignLabelWithHint: true,
+          ),
+          maxLines: 4,
+          controller: TextEditingController(text: _projectDescription),
+          onChanged: (val) => _projectDescription = val,
+        ),
+      ],
+    );
+  }
+
   void _saveSettings() {
     final appState = context.read<AppState>();
     
@@ -203,6 +242,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
         showGrid: _tabShowGrid,
         snapToGrid: _tabSnapToGrid,
       ),
+    );
+
+    appState.updateProjectMetadata(
+      name: _projectName,
+      author: _projectAuthor,
+      description: _projectDescription,
     );
 
     Navigator.of(context).pop();

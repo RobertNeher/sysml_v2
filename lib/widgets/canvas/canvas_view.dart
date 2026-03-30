@@ -9,6 +9,8 @@ import '../../models/sysml_element.dart';
 import '../../models/alignment_types.dart';
 import '../sysml_elements/block_widget.dart';
 import '../../models/settings.dart';
+import '../../utils/file_helper.dart';
+import '../dialogs/tab_dialogs.dart';
 import 'canvas_painter.dart';
 
 class CanvasView extends StatefulWidget {
@@ -77,8 +79,8 @@ class _CanvasViewState extends State<CanvasView> {
 
               if (isControlPressed) {
                 if (event.logicalKey == LogicalKeyboardKey.keyA) {
-                  final ids = appState.currentTab.elements.map((e) => e.id);
-                  canvasState.selectAll(ids);
+                  final ids = appState.currentTab.elements.map((e) => e.id).toSet();
+                  canvasState.setSelectedIds(ids);
                   return KeyEventResult.handled;
                 }
                 void showShiftMessage() {
@@ -118,12 +120,54 @@ class _CanvasViewState extends State<CanvasView> {
                   if (moved) showShiftMessage();
                   return KeyEventResult.handled;
                 }
+                if (event.logicalKey == LogicalKeyboardKey.escape) {
+                  appState.setActiveConnectionType(null);
+                  canvasState.clearSelection();
+                  return KeyEventResult.handled;
+                }
                 if (event.logicalKey == LogicalKeyboardKey.keyZ) {
                   appState.undo();
                   return KeyEventResult.handled;
                 }
                 if (event.logicalKey == LogicalKeyboardKey.keyY) {
                   appState.redo();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.keyS) {
+                  final json = appState.exportProjectJson();
+                  FileHelper.saveProject(appState.project.name, json).then((_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Project saved')),
+                      );
+                    }
+                  });
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.keyO) {
+                  FileHelper.openProject().then((json) {
+                    if (json != null) {
+                      appState.importProjectJson(json);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Project loaded')),
+                        );
+                      }
+                    }
+                  });
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.keyN) {
+                  showDialog<Map<String, dynamic>>(
+                    context: context,
+                    builder: (context) => NewDiagramDialog(
+                      initialType: appState.currentTab.diagramType,
+                    ),
+                  ).then((result) {
+                    if (result != null) {
+                      appState.addTab(result['name'], result['type']);
+                    }
+                  });
                   return KeyEventResult.handled;
                 }
               }
@@ -196,14 +240,39 @@ class _CanvasViewState extends State<CanvasView> {
                   onPointerDown: (event) {
                     final bool isCtrlPressed =
                         HardwareKeyboard.instance.isControlPressed;
+                    
+                    final worldPos = Offset(
+                      (event.localPosition.dx - translation.x) / scale,
+                      (event.localPosition.dy - translation.y) / scale,
+                    );
+
+                    // Check for connection hit-test first
+                    String? hitConnectionId;
+                    for (var conn in appState.currentTab.connections) {
+                      final source = appState.currentTab.elements.firstWhere((e) => e.id == conn.sourceElementId);
+                      final target = appState.currentTab.elements.firstWhere((e) => e.id == conn.targetElementId);
+                      final start = Offset(source.x + source.width / 2, source.y + source.height / 2);
+                      final end = Offset(target.x + target.width / 2, target.y + target.height / 2);
+                      
+                      // Simple line distance hit test
+                      final dist = (worldPos - start).distance + (worldPos - end).distance;
+                      final lineLen = (start - end).distance;
+                      if ((dist - lineLen).abs() < 5.0 / scale) {
+                        hitConnectionId = conn.id;
+                        break;
+                      }
+                    }
+
+                    if (hitConnectionId != null) {
+                      appState.setSelectedConnectionId(hitConnectionId);
+                      return;
+                    }
+
                     if (isCtrlPressed) {
-                      final worldPos = Offset(
-                        (event.localPosition.dx - translation.x) / scale,
-                        (event.localPosition.dy - translation.y) / scale,
-                      );
                       canvasState.startSelection(worldPos);
                     } else {
                       canvasState.clearSelection();
+                      appState.setSelectedElementId(null);
                     }
                   },
                   onPointerMove: (event) {
@@ -227,40 +296,55 @@ class _CanvasViewState extends State<CanvasView> {
                       final selectedIds = elements
                           .where((e) => rect.overlaps(
                               Rect.fromLTWH(e.x, e.y, e.width, e.height)))
-                          .map((e) => e.id);
-                      canvasState.selectAll(selectedIds);
+                          .map((e) => e.id)
+                          .toSet();
+                      canvasState.setSelectedIds(selectedIds);
                     }
                     canvasState.clearSelectionBox();
                   },
-                  child: ClipRect(
-                    child: InteractiveViewer(
-                      transformationController: _transformationController,
-                      boundaryMargin: const EdgeInsets.all(double.infinity),
-                      minScale: 0.1,
-                      maxScale: 5.0,
-                      // Disable IV handles if Ctrl is pressed to allow selection box
-                      panEnabled: !HardwareKeyboard.instance.isControlPressed,
-                      scaleEnabled: !HardwareKeyboard.instance.isControlPressed,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: CanvasPainter(
-                                zoom: scale,
-                                panOffset: Offset(translation.x, translation.y),
-                                showGrid: canvasState.showGrid,
-                                gridSize: canvasState.gridSize,
-                                gridColor: Theme.of(context).colorScheme.outline,
-                                selectionStart: canvasState.selectionStart,
-                                selectionEnd: canvasState.selectionEnd,
+                  child: MouseRegion(
+                    onHover: (event) {
+                      final worldX = (event.localPosition.dx - translation.x) / scale;
+                      final worldY = (event.localPosition.dy - translation.y) / scale;
+                      canvasState.updateMousePosition(Offset(worldX, worldY));
+                    },
+                    child: ClipRect(
+                      child: InteractiveViewer(
+                        transformationController: _transformationController,
+                        boundaryMargin: const EdgeInsets.all(double.infinity),
+                        minScale: 0.1,
+                        maxScale: 5.0,
+                        // Disable IV handles if Ctrl is pressed to allow selection box
+                        panEnabled: !HardwareKeyboard.instance.isControlPressed,
+                        scaleEnabled: !HardwareKeyboard.instance.isControlPressed,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: CanvasPainter(
+                                  zoom: scale,
+                                  panOffset: Offset(translation.x, translation.y),
+                                  showGrid: canvasState.showGrid,
+                                  gridSize: canvasState.gridSize,
+                                  gridColor: Theme.of(context).colorScheme.outline,
+                                  selectionStart: canvasState.selectionStart,
+                                  selectionEnd: canvasState.selectionEnd,
+                                  elements: appState.currentTab.elements,
+                                  connections: appState.currentTab.connections,
+                                  connectionSourceId: appState.connectionSourceId,
+                                  activeConnectionType: appState.activeConnectionType,
+                                  selectedConnectionId: appState.selectedConnectionId,
+                                  mousePosition: canvasState.mousePosition,
+                                ),
                               ),
                             ),
-                          ),
-                          _ElementsLayer(
-                            elements: appState.currentTab.elements,
-                            scale: scale,
-                          ),
-                        ],
+                            _ElementsLayer(
+                              elements: appState.currentTab.elements,
+                              scale: scale,
+                              connectionSourceId: appState.connectionSourceId,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -277,13 +361,48 @@ class _CanvasViewState extends State<CanvasView> {
 class _ElementsLayer extends StatelessWidget {
   final List<SysmlElement> elements;
   final double scale;
+  final String? connectionSourceId;
 
-  const _ElementsLayer({required this.elements, required this.scale});
+  const _ElementsLayer({
+    required this.elements,
+    required this.scale,
+    this.connectionSourceId,
+  });
 
   @override
   Widget build(BuildContext context) {
     final canvasState = context.watch<CanvasState>();
     final appState = context.read<AppState>();
+
+    void _handleElementTap(String id) {
+      if (appState.activeConnectionType != null) {
+        if (appState.connectionSourceId == null) {
+          appState.setConnectionSourceId(id);
+        } else {
+          if (appState.connectionSourceId != id) {
+            appState.addConnection(
+              appState.connectionSourceId!,
+              id,
+              appState.activeConnectionType!,
+            );
+          }
+          appState.setActiveConnectionType(null);
+        }
+        return;
+      }
+
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        final selected = Set<String>.from(canvasState.selectedIds);
+        if (selected.contains(id)) {
+          selected.remove(id);
+        } else {
+          selected.add(id);
+        }
+        canvasState.setSelectedIds(selected);
+      } else {
+        canvasState.setSelectedIds({id});
+      }
+    }
 
     return Stack(
       children: elements.map((element) {
@@ -293,9 +412,7 @@ class _ElementsLayer extends StatelessWidget {
           top: element.y,
           child: GestureDetector(
             onTapDown: (_) {
-              final bool isMulti = HardwareKeyboard.instance.isControlPressed ||
-                  HardwareKeyboard.instance.isShiftPressed;
-              canvasState.selectElement(element.id, multi: isMulti);
+              _handleElementTap(element.id);
             },
             onPanUpdate: (details) {
               if (isSelected) {
@@ -307,6 +424,7 @@ class _ElementsLayer extends StatelessWidget {
             child: BlockWidget(
               element: element,
               isSelected: isSelected,
+              isConnectionSource: connectionSourceId == element.id,
             ),
           ),
         );

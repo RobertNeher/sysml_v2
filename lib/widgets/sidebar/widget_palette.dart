@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/sysml_types.dart';
+import '../../state/app_state.dart';
 
 class WidgetPalette extends StatelessWidget {
   const WidgetPalette({super.key});
@@ -47,7 +49,57 @@ class WidgetPalette extends StatelessWidget {
           SysmlElementType.requirement,
           Icons.assignment_outlined,
         ),
+        const Divider(),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Text('Relationships', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        ),
+        _buildConnectionTile(
+          context,
+          'Association',
+          ConnectionType.association,
+          Icons.link,
+        ),
+        _buildConnectionTile(
+          context,
+          'Generalization',
+          ConnectionType.generalization,
+          Icons.arrow_upward,
+        ),
+        _buildConnectionTile(
+          context,
+          'Dependency',
+          ConnectionType.dependency,
+          Icons.trending_flat,
+        ),
       ],
+    );
+  }
+
+  Widget _buildConnectionTile(
+    BuildContext context,
+    String label,
+    ConnectionType type,
+    IconData icon,
+  ) {
+    final appState = context.watch<AppState>();
+    final isSelected = appState.activeConnectionType == type;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
+      child: ListTile(
+        leading: Icon(icon, color: isSelected ? Theme.of(context).colorScheme.primary : null),
+        title: Text(label, style: TextStyle(color: isSelected ? Theme.of(context).colorScheme.primary : null, fontWeight: isSelected ? FontWeight.bold : null)),
+        dense: true,
+        onTap: () {
+          if (isSelected) {
+            appState.setActiveConnectionType(null);
+          } else {
+            appState.setActiveConnectionType(type);
+          }
+        },
+      ),
     );
   }
 

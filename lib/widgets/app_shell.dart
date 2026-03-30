@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import 'sidebar/sidebar.dart';
+import 'sidebar/property_inspector.dart';
 import 'canvas/canvas_view.dart';
 import 'settings/settings_dialog.dart';
+import 'dialogs/tab_dialogs.dart';
+import '../utils/file_helper.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -14,6 +17,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   bool _isSidebarVisible = true;
+  bool _isInspectorVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -26,15 +30,29 @@ class _AppShellState extends State<AppShell> {
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: () {
-              // TODO: Implement save
+            onPressed: () async {
+              final json = appState.exportProjectJson();
+              await FileHelper.saveProject(project.name, json);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Project saved')),
+                );
+              }
             },
             tooltip: 'Save Project (Ctrl+S)',
           ),
           IconButton(
             icon: const Icon(Icons.folder_open),
-            onPressed: () {
-              // TODO: Implement open
+            onPressed: () async {
+              final json = await FileHelper.openProject();
+              if (json != null) {
+                appState.importProjectJson(json);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Project loaded')),
+                  );
+                }
+              }
             },
             tooltip: 'Open Project (Ctrl+O)',
           ),
@@ -47,6 +65,17 @@ class _AppShellState extends State<AppShell> {
               );
             },
             tooltip: 'Settings',
+          ),
+          IconButton(
+            icon: Icon(appState.selectedElementId != null || appState.selectedConnectionId != null 
+                ? Icons.info 
+                : Icons.info_outline),
+            onPressed: () {
+              setState(() {
+                _isInspectorVisible = !_isInspectorVisible;
+              });
+            },
+            tooltip: 'Toggle Inspector',
           ),
           const SizedBox(width: 8),
         ],
@@ -79,6 +108,13 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
           ),
+          if (_isInspectorVisible) ...[
+            const VerticalDivider(width: 1),
+            const SizedBox(
+              width: 250,
+              child: PropertyInspector(),
+            ),
+          ],
         ],
       ),
     );
@@ -100,8 +136,14 @@ class _AppShellState extends State<AppShell> {
 
                 return GestureDetector(
                   onTap: () => appState.setCurrentTabIndex(index),
-                  onDoubleTap: () {
-                    // TODO: Show rename dialog
+                  onDoubleTap: () async {
+                    final newName = await showDialog<String>(
+                      context: context,
+                      builder: (context) => RenameTabDialog(initialName: tab.name),
+                    );
+                    if (newName != null && newName.isNotEmpty) {
+                      appState.updateTabName(index, newName);
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -131,7 +173,24 @@ class _AppShellState extends State<AppShell> {
                         if (appState.project.tabs.length > 1) ...[
                           const SizedBox(width: 8),
                           InkWell(
-                            onTap: () => appState.removeTab(index),
+                            onTap: () async {
+                              final tab = appState.project.tabs[index];
+                              if (tab.elements.isNotEmpty) {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete Tab?'),
+                                    content: Text('The tab "${tab.name}" contains elements. Are you sure you want to delete it?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete'), style: TextButton.styleFrom(foregroundColor: Colors.red)),
+                                    ],
+                                  ),
+                                );
+                                if (confirm != true) return;
+                              }
+                              appState.removeTab(index);
+                            },
                             child: const Icon(Icons.close, size: 14),
                           ),
                         ],
@@ -144,9 +203,16 @@ class _AppShellState extends State<AppShell> {
           ),
           IconButton(
             icon: const Icon(Icons.add, size: 20),
-            onPressed: () {
-              // TODO: Show new tab dialog
-              appState.addTab('New Model', appState.currentTab.diagramType);
+            onPressed: () async {
+              final result = await showDialog<Map<String, dynamic>>(
+                context: context,
+                builder: (context) => NewDiagramDialog(
+                  initialType: appState.currentTab.diagramType,
+                ),
+              );
+              if (result != null) {
+                appState.addTab(result['name'], result['type']);
+              }
             },
             tooltip: 'New Tab (Ctrl+N)',
           ),
